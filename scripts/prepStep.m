@@ -65,41 +65,47 @@
 
 function const = prepStep(S)
     
-    % Recursively compute the square-root of the 1D weight function w(x;p,S-1) 
-    % for p = 0.5
-    w = zeros(S,1);
-    w(1) = 1;
-    for x = 0:floor((S-1)/2)-1
-        w(x+2) = w(x+1) *  sqrt((S-1-x) / (x+1)) ;
-    end
-    w = w * (0.5)^((S-1)/2);
-    
-    % Use symmetry to produce the second half of w(x;p,S-1) from its first half
-    w( S-floor(S/2)+1 : 1 : S ) = w( floor(S/2) : -1 : 1 );
-    
-    % Compute the 2D weight function for px = py = 0.5 defined on the discrete 
-    % domain {0,1,...,S-1} x {0,1,...,S-1}
-    const.Wc = w*w';
-    
-    % Compute the norms rho(n;p,S-1) for p = 0.5 and n = 0,...,3.
-    % See equation (6) in [2]
-    const.rho = zeros(1,4);
-    const.rho(1) =  1;
-    const.rho(2) =  1 / (S-1);
-    const.rho(3) =  2 / ((S-1)*(S-2));
-    const.rho(4) =  6 / ((S-1)*(S-2)*(S-3));
-    
-    % Compute the coefficients a(k,n,p,S-1) for p = 0.5, n = 0,...,3, and 
-    % k = 0,...,n. See equation (1) in [2]
-    const.a = zeros(4,4);
-    const.a(1,1) = 1;
-    const.a(1,2) = 1;
-    const.a(2,2) = - 2/(S-1);
-    const.a(1,3) = 1;
-    const.a(2,3) = - 4/(S-1) - 4/((S-1)*(S-2));
-    const.a(3,3) = 4/((S-1)*(S-2));
-    const.a(1,4) = 1;
-    const.a(2,4) = - 6/(S-1) - 12/((S-1)*(S-2)) - 16/((S-1)*(S-2)*(S-3));
-    const.a(3,4) = 12/((S-1)*(S-2)) + 24/((S-1)*(S-2)*(S-3));
-    const.a(4,4) = - 8/((S-1)*(S-2)*(S-3));
+  % Recursively compute the square-root of the 1D weight function w(x;p,S-1) 
+  % for p = 0.5
+  w = zeros(S,1);
+  w(1) = 1;
+  for x = 0:floor((S-1)/2)-1
+      w(x+2) = w(x+1) * sqrt((S-1-x) / (x+1));
+  end
+  w = w * (0.5)^((S-1)/2);
+  
+  % Use symmetry to produce the second half of w(x;p,S-1) from its first half
+  w( S-floor(S/2)+1 : 1 : S ) = w( floor(S/2) : -1 : 1 );
+  
+  % Compute the 2D weight function for px = py = 0.5 defined on the discrete 
+  % domain {0,1,...,S-1} x {0,1,...,S-1}
+  const.Wc = w * w';
+  
+  % Compute the integral image of Wc(x,y) for fast weighted summation
+  const.I_W = cumsum(cumsum(const.Wc, 1), 2);
+  
+  % Compute the norms rho(n;p,S-1) for p = 0.5 and n = 0,...,3.
+  % See equation (6) in [2]
+  const.rho = zeros(1,4);
+  const.rho(1) =  1;
+  const.rho(2) =  1 / (S-1);
+  const.rho(3) =  2 / ((S-1)*(S-2));
+  const.rho(4) =  6 / ((S-1)*(S-2)*(S-3));
+  
+  % Compute the coefficients a(k,n,p,S-1) for p = 0.5, n = 0,...,3, and 
+  % k = 0,...,n. See equation (1) in [2]
+  const.a = zeros(4,4);
+  const.a(1,1) = 1;
+  const.a(1,2) = 1;
+  const.a(2,2) = -2/(S-1);
+  const.a(1,3) = 1;
+  const.a(2,3) = -4/(S-1) - 4/((S-1)*(S-2));
+  const.a(3,3) = 4/((S-1)*(S-2));
+  const.a(1,4) = 1;
+  const.a(2,4) = -6/(S-1) - 12/((S-1)*(S-2)) - 16/((S-1)*(S-2)*(S-3));
+  const.a(3,4) = 12/((S-1)*(S-2)) + 24/((S-1)*(S-2)*(S-3));
+  const.a(4,4) = -8/((S-1)*(S-2)*(S-3));
+
+end
+
     
