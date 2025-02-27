@@ -61,123 +61,91 @@
 
 function top_matches = dbSearch(queryPath,DB,dbPath,imageList,S,frameSize,xp,yp)
 
-% Read the query image file to 2D function fQuery(x,y)
-[fQuery, ~] = readImage(queryPath);
+  % Read the query image file to 2D function fQuery(x,y)
+  [fQuery, ~] = readImage(queryPath);
 
-% Precompute constants (norms, coefficients, central weight)
-const = prepStep(S);
+  % Precompute constants (norms, coefficients, central weight)
+  const = prepStep(S);
 
-% Compute the 2DKD of the query corresponding to the location (xp,yp)
-[fs, xs, ys] = squareCrop(fQuery, xp, yp, S);
-Vquery = compDesc(fs, xs, ys, const);
+  % 🔹 Precompute integral images for query descriptor extraction
+  I_f = cumsum(cumsum(fQuery, 1), 2);  % Integral image of f
+  I_xf = cumsum(cumsum(repmat((0:size(fQuery,1)-1)', 1, size(fQuery,2)) .* fQuery, 1), 2);
+  I_yf = cumsum(cumsum(repmat(0:size(fQuery,2)-1, size(fQuery,1), 1) .* fQuery, 1), 2);
+  I_fW = cumsum(cumsum(fQuery .* const.Wc, 1), 2);  % Weighted integral image
 
-% Number of entries in the database
-dbSize = size(DB,1);
+  % 🔹 Compute the query descriptor using integral images
+  Vquery = compDescDP(I_f, I_xf, I_yf, I_fW, xp, yp, S, const);
 
-% Compute all (squared) Euclidean distances between 2DKDs: Query vs. entire database
-EucDist = sum( ( repmat(Vquery,dbSize,1) - DB(:,4:9) ).^2 , 2 ) ;
+  % Number of entries in the database
+  dbSize = size(DB,1);
 
-% Concatenate Euclidean distances to dataset for sorting altogether
-DB = [DB EucDist];
+  % 🔹 Compute Euclidean distances efficiently
+  EucDist = sum((repmat(Vquery, dbSize, 1) - DB(:, 4:9)).^2, 2);
 
-% Sort the database with respect to Euclidean distances column
-DB = sortrows(DB,10);
+  % Append Euclidean distances to the database for sorting
+  DB = [DB EucDist];
 
-% Remove redundancies in top 2000 (Same/overlapping regions)
-k = min(dbSize,2000);
-DB = DB( 1:k, : );
-dbSize = size(DB,1);
+  % Sort the database by Euclidean distances
+  DB = sortrows(DB, 10);
 
-k = dbSize;
-Ind = ones(1,k);
-for i = 1:k-1
-    if Ind(i) == 1
-        %% THIS PART IS REVISED TO MAKE IT MORE EFFICIENT (SEE BELOW)
-        %%for j = i+1:k
-            %%if ( (DB(i,1)==DB(j,1)) && (abs(DB(i,2) - DB(j,2)) <= 10)  &&  (abs(DB(i,3) - DB(j,3)) <= 10) )
-                %%Ind(j) = 0;
-            %%end
-        %%end
-        T = abs( DB(i+1:k,1:3) - DB(i,1:3) ) <= [0 10 10];
-        T = sum(T,2);
-        [T,~] = find(T==3);
-        Ind(T+i) = zeros(size(T));        
-    end
-end
-DB(Ind==0,:) = [];
-dbSize = size(DB,1);
+  % 🔹 Remove redundant matches in the top 2000 results
+  k = min(dbSize, 2000);
+  DB = DB(1:k, :);
+  dbSize = size(DB,1);
 
-% Top k matches from the indexed database
-% Results are listed in the following format:
-% [ rankingNumber imageFileName  xLocation  yLocation ]
-k = 15;
-%fprintf('Top %i matches from the indexed database.\n',k);
-%fprintf('Results are listed in the format:\n');
-%fprintf('\n'' rankingNumber imageFileName  xLocation  yLocation ''\n\n');
+  Ind = ones(1, k);
+  for i = 1:k-1
+      if Ind(i) == 1
+          % Faster way to check for nearby duplicate regions
+          T = abs(DB(i+1:k, 1:3) - DB(i, 1:3)) <= [0 10 10];
+          T = sum(T, 2);
+          [T, ~] = find(T == 3);
+          Ind(T + i) = 0;
+      end
+  end
+  DB(Ind == 0, :) = [];
+  dbSize = size(DB,1);
 
-top_matches = [ repmat('  ',[k 1]) num2str((1:k)') repmat('    ',[k 1]) ...
-            imageList(DB(1:k,1),:)  repmat('  ',[k 1]) num2str(DB(1:k,2:3))];
+  % 🔹 Select top 15 matches for final output
+  k = min(dbSize, 15);
+  top_matches = [repmat('  ', [k 1]), num2str((1:k)'), repmat('    ', [k 1]), ...
+                 imageList(DB(1:k, 1), :), repmat('  ', [k 1]), num2str(DB(1:k, 2:3))];
 
-% Plot the query subimage
-X = 0:frameSize-1;    Y = X;
-[X,Y] = ndgrid(X,Y);
+  % 🔹 Visualization (unchanged)
+  X = 0:frameSize-1;
+  Y = X;
+  [X, Y] = ndgrid(X, Y);
 
-[~,fileName,ext] = fileparts(queryPath);
+  [~, fileName, ext] = fileparts(queryPath);
+  s = get(0, 'ScreenSize');
+  figure('Position', [10 10 s(3)-100 s(4)-100]);
 
-s = get(0, 'ScreenSize');
-figure('Position', [10 10 s(3)-100 s(4)-100]);
+  subplot(3,6,1);
+  [fQueryLocal,~,~] = squareCrop(fQuery, xp, yp, frameSize);
+  pl = pcolor(X, -Y, fQueryLocal);
+  axis equal tight;
+  colormap gray;
+  set(pl, 'edgecolor', 'none');
+  axis off;
+  title({'Query', [fileName ext], ['(x,y) = (' num2str(xp) ',' num2str(yp) ')']}, ...
+        'Interpreter', 'none', 'Fontsize', 8);
 
-subplot(3,6,1)
-[fQueryLocal,~,~] = squareCrop(fQuery,xp,yp,frameSize);
-pl = pcolor(X,-Y,fQueryLocal);
-axis equal tight
-colormap gray
-set(pl,'edgecolor','none')
-axis off;
-title({'Query',[fileName ext],['(x,y) = (' num2str(xp) ',' num2str(yp) ')']},'Interpreter', 'none','Fontsize',8);
+  % 🔹 Display Top 15 Matches
+  for i = 1:k
+      [~, fileName, ext] = fileparts(imageList(DB(i, 1), :));
+      [fMatch, ~] = readImage([dbPath fileName ext(1:4)]);
+      xMatch = DB(i, 2);
+      yMatch = DB(i, 3);
+      [fMatchLocal,~,~] = squareCrop(fMatch, xMatch, yMatch, frameSize);
 
-
-% Plot top 15 retrievals from the database
-for i = 1:15
-    
-    [~,fileName,ext] = fileparts(imageList(DB(i,1),:));
-    [fMatch, ~] = readImage([dbPath fileName ext(1:4)]);
-    
-    xMatch = DB(i,2);    yMatch = DB(i,3);
-    
-    [fMatchLocal,~,~] = squareCrop(fMatch,xMatch,yMatch,frameSize);
-    
-    if i<=5
-        subplot(3,6,i+1)
-        pl = pcolor(X,-Y,fMatchLocal);
-        axis equal tight
-        colormap gray
-        set(pl,'edgecolor','none')
-        axis off;
-        istr = num2str(i);
-        title({['Top ' istr],[fileName ext],['(x,y) = (' num2str(xMatch) ',' num2str(yMatch) ')']},'Interpreter', 'none','Fontsize',8);
-    end
-    
-    if i>5  &&  i<=10
-        subplot(3,6,i+2)
-        pl = pcolor(X,-Y,fMatchLocal);
-        axis equal tight
-        colormap gray
-        set(pl,'edgecolor','none')
-        axis off;
-        istr = num2str(i);
-        title({['Top ' istr],[fileName ext],['(x,y) = (' num2str(xMatch) ',' num2str(yMatch) ')']},'Interpreter', 'none','Fontsize',8);
-    end
-    
-    if i>10
-        subplot(3,6,i+3)
-        pl = pcolor(X,-Y,fMatchLocal);
-        axis equal tight
-        colormap gray
-        set(pl,'edgecolor','none')
-        axis off;
-        istr = num2str(i);
-        title({['Top ' istr],[fileName ext],['(x,y) = (' num2str(xMatch) ',' num2str(yMatch) ')']},'Interpreter', 'none','Fontsize',8);
-    end
-    
+      subplotIdx = i + 1 + (i > 5) + (i > 10);
+      subplot(3, 6, subplotIdx);
+      pl = pcolor(X, -Y, fMatchLocal);
+      axis equal tight;
+      colormap gray;
+      set(pl, 'edgecolor', 'none');
+      axis off;
+      title({['Top ' num2str(i)], [fileName ext], ['(x,y) = (' num2str(xMatch) ',' num2str(yMatch) ')']}, ...
+            'Interpreter', 'none', 'Fontsize', 8);
+  end
 end
