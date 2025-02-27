@@ -59,25 +59,16 @@
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function top_matches = dbSearch(queryPath,DB,dbPath,imageList,S,frameSize,xp,yp)
+function top_matches = dbSearch(queryPath, DB, dbPath, imageList, S, frameSize, xp, yp)
 
-  % Read the query image file to 2D function fQuery(x,y)
-  [fQuery, ~] = readImage(queryPath);
-
-  % Precompute constants (norms, coefficients, central weight)
-  const = prepStep(S);
-
-  % 🔹 Precompute integral images for query descriptor extraction
-  I_f = cumsum(cumsum(fQuery, 1), 2);  % Integral image of f
-  I_xf = cumsum(cumsum(repmat((0:size(fQuery,1)-1)', 1, size(fQuery,2)) .* fQuery, 1), 2);
-  I_yf = cumsum(cumsum(repmat(0:size(fQuery,2)-1, size(fQuery,1), 1) .* fQuery, 1), 2);
-  I_fW = cumsum(cumsum(fQuery .* const.Wc, 1), 2);  % Weighted integral image
+  % 🔹 Read the query image and retrieve integral images
+  [fQuery, ~, I_f, I_xf, I_yf, I_fW] = readImage(queryPath, prepStep(S));
 
   % 🔹 Compute the query descriptor using integral images
-  Vquery = compDescDP(I_f, I_xf, I_yf, I_fW, xp, yp, S, const);
+  Vquery = compDescDP(I_f, I_xf, I_yf, I_fW, xp, yp, S, prepStep(S));
 
   % Number of entries in the database
-  dbSize = size(DB,1);
+  dbSize = size(DB, 1);
 
   % 🔹 Compute Euclidean distances efficiently
   EucDist = sum((repmat(Vquery, dbSize, 1) - DB(:, 4:9)).^2, 2);
@@ -91,7 +82,7 @@ function top_matches = dbSearch(queryPath,DB,dbPath,imageList,S,frameSize,xp,yp)
   % 🔹 Remove redundant matches in the top 2000 results
   k = min(dbSize, 2000);
   DB = DB(1:k, :);
-  dbSize = size(DB,1);
+  dbSize = size(DB, 1);
 
   Ind = ones(1, k);
   for i = 1:k-1
@@ -104,7 +95,7 @@ function top_matches = dbSearch(queryPath,DB,dbPath,imageList,S,frameSize,xp,yp)
       end
   end
   DB(Ind == 0, :) = [];
-  dbSize = size(DB,1);
+  dbSize = size(DB, 1);
 
   % 🔹 Select top 15 matches for final output
   k = min(dbSize, 15);
@@ -133,7 +124,7 @@ function top_matches = dbSearch(queryPath,DB,dbPath,imageList,S,frameSize,xp,yp)
   % 🔹 Display Top 15 Matches
   for i = 1:k
       [~, fileName, ext] = fileparts(imageList(DB(i, 1), :));
-      [fMatch, ~] = readImage([dbPath fileName ext(1:4)]);
+      [fMatch, ~, I_f, I_xf, I_yf, I_fW] = readImage([dbPath fileName ext(1:4)], prepStep(S));
       xMatch = DB(i, 2);
       yMatch = DB(i, 3);
       [fMatchLocal,~,~] = squareCrop(fMatch, xMatch, yMatch, frameSize);
