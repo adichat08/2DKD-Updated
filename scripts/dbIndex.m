@@ -63,83 +63,89 @@
 
 function dbIndex(dbPath,S,inc,frameSize,lv_check)
 
-% List of images in the database (specify all possible image extensions)
-imageList = [dir([dbPath '*.jpg']);...
-             dir([dbPath '*.png']);...
-             dir([dbPath '*.gif'])];
-imageList = char(imageList.name);
-nImages = size(imageList,1);
-
-% Initiate the database records (start with a large enough array; unused
-% rows will be deleted at the end)
-DB = zeros(nImages*200^2,9);
-
-% Precompute constants (norms, coefficients, central weight)
-const = prepStep(S);
-
-% Counter for the number of rows in the indexed database
-rowno = 0;
-
-for imageNo = 1:nImages
-    
-    [~,fileName,ext] = fileparts(imageList(imageNo,:));
-    impath = [dbPath fileName ext(1:4)];
-    [f,~] = readImage(impath);
-    
-    [N,M] = size(f);
-    
-    xstart = max(inc,20);
-    xend = N - xstart;
-    
-    ystart = max(inc,20);
-    yend = M - ystart;
-    
-    GloVar = var(f(:));
-    
-    for xp = xstart:inc:xend
-        for yp = ystart:inc:yend
-            
-            if lv_check~=0
-                
-                fLocal = f(xp-frameSize/2+1:xp+frameSize/2,...
-                           yp-frameSize/2+1:yp+frameSize/2);
-                
-                % Local variation
-                LocVar = var(fLocal(:));
-                
-                if LocVar >= GloVar
-                
-                    [fs,xs,ys] = squareCrop(f,xp,yp,S);
-                
-                    V = compDesc(fs,xs,ys,const);
-                
-                    if isempty(V)~=1
-                        rowno = rowno + 1;
-                        DB(rowno,:) = [ imageNo xp yp V ];
-                    end
-                    
-                end
-                
-            else
-                
-                [fs,xs,ys] = squareCrop(f,xp,yp,S);
-                
-                V = compDesc(fs,xs,ys,const);
-                
-                if isempty(V)~=1
-                	rowno = rowno + 1;
-                    DB(rowno,:) = [ imageNo xp yp V ];
-                end
-                
-            end
-            
-        end
-    end
-    
-end
-
-% Delete the unused rows at the bottom
-DB(rowno+1:nImages*200^2,:) = [];
-
-% Save the indexed database to file for later use
-save('-mat',[dbPath 'indexedDB.mat'], 'DB', 'imageList', 'S', 'frameSize');
+  % List of images in the database (specify all possible image extensions)
+  imageList = [dir([dbPath '*.jpg']);...
+               dir([dbPath '*.png']);...
+               dir([dbPath '*.gif'])];
+  imageList = char(imageList.name);
+  nImages = size(imageList,1);
+  
+  % Initiate the database records (start with a large enough array; unused
+  % rows will be deleted at the end)
+  DB = zeros(nImages*200^2,9);
+  
+  % Precompute constants (norms, coefficients, central weight)
+  const = prepStep(S);
+  
+  % Counter for the number of rows in the indexed database
+  rowno = 0;
+  
+  for imageNo = 1:nImages
+      
+      [~,fileName,ext] = fileparts(imageList(imageNo,:));
+      impath = [dbPath fileName ext(1:4)];
+      [f,~] = readImage(impath);
+      
+      [N,M] = size(f);
+  
+      % 🔹 Precompute integral images for f and f * Wc
+      I_f = cumsum(cumsum(f, 1), 2);  % Standard integral image of f
+      I_xf = cumsum(cumsum(repmat((0:N-1)', 1, M) .* f, 1), 2);  % Integral image of x*f
+      I_yf = cumsum(cumsum(repmat(0:M-1, N, 1) .* f, 1), 2);  % Integral image of y*f
+      I_fW = cumsum(cumsum(f .* const.Wc, 1), 2);  % Integral image for weighted f
+  
+      xstart = max(inc,20);
+      xend = N - xstart;
+      
+      ystart = max(inc,20);
+      yend = M - ystart;
+      
+      GloVar = var(f(:));
+      
+      for xp = xstart:inc:xend
+          for yp = ystart:inc:yend
+              
+              if lv_check ~= 0
+                  
+                  fLocal = f(xp-frameSize/2+1:xp+frameSize/2,...
+                             yp-frameSize/2+1:yp+frameSize/2);
+                  
+                  % Local variation
+                  LocVar = var(fLocal(:));
+                  
+                  if LocVar >= GloVar
+                  
+                      % 🔹 Use integral images for fast descriptor computation
+                      V = compDescDP(I_f, I_xf, I_yf, I_fW, xp, yp, S, const);
+                  
+                      if ~isempty(V)
+                          rowno = rowno + 1;
+                          DB(rowno,:) = [ imageNo xp yp V ];
+                      end
+                      
+                  end
+                  
+              else
+                  
+                  % 🔹 Use integral images for fast descriptor computation
+                  V = compDescDP(I_f, I_xf, I_yf, I_fW, xp, yp, S, const);
+                  
+                  if ~isempty(V)
+                    rowno = rowno + 1;
+                      DB(rowno,:) = [ imageNo xp yp V ];
+                  end
+                  
+              end
+              
+          end
+      end
+      
+  end
+  
+  % Delete the unused rows at the bottom
+  DB(rowno+1:nImages*200^2,:) = [];
+  
+  % Save the indexed database to file for later use
+  save('-mat',[dbPath 'indexedDB.mat'], 'DB', 'imageList', 'S', 'frameSize');
+  
+  
