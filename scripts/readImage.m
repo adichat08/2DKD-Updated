@@ -55,18 +55,27 @@
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function [f,S] = readImage(imagePath)
-    
-    % Read the image file and store it to a 2D denstiy matrix f    
-    f = imread(imagePath);
-    f = im2double(f);
-    f = f';  % To make it an N-by-M matrix
-    
-    % Size of the input image
-    [N,M] = size(f);
-    
-    % Size of the maximal square crop
-    S = min([N M 600]);
-    if mod(S,2)==1
-        S = S-1;  % S is an even number
-    end
+function [f, S, I_f, I_xf, I_yf, I_fW] = readImage(imagePath, const)
+
+  % Read the image file and store it to a 2D grayscale density matrix f    
+  f = imread(imagePath);
+  f = im2double(f);
+  f = f';  % Transpose if necessary
+
+  % Get the size of the input image
+  [N, M] = size(f);
+  
+  % Size of the maximal square crop
+  S = min([N M 600]);
+  if mod(S,2) == 1
+      S = S - 1;  % Ensure S is even
+  end
+
+  % 🔹 Compute integral images (for fast descriptor computation)
+  I_f = cumsum(cumsum(f, 1), 2);  % Integral image of f
+  I_xf = cumsum(cumsum(repmat((0:N-1)', 1, M) .* f, 1), 2);  % Integral image of x*f
+  I_yf = cumsum(cumsum(repmat(0:M-1, N, 1) .* f, 1), 2);  % Integral image of y*f
+  I_fW = cumsum(cumsum(f .* const.Wc, 1), 2);  % Integral image for weighted f
+
+end
+
