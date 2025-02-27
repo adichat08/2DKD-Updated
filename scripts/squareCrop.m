@@ -56,67 +56,34 @@
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function [fs,xs,ys] = squareCrop(f,xp,yp,S)
-    
-    % Size of the input image
-    [N,M] = size(f);
-    
-    % Error message to ensure the input point-of-interest is appropriate
-    if mod(xp,1)~=0  ||  xp<0  ||  xp>=N
-        fprintf('\nError: xp must be an integer satisfying 0 <= xp < %i \n\n',N);
-        return
-    end
-    if mod(yp,1)~=0  ||  yp<0  ||  yp>=M
-        fprintf('\nError: yp must be an integer satisfying 0 <= yp < %i \n\n',M);
-        return
-    end
-    if mod(S,2)~=0
-        fprintf('\nError: S must be an even integer <= %i \n\n',min([N M]));
-        return
-    end
-    
-    if (S ~= N) || (S ~= M)  % square crop is needed
-        
-        % The beginnning and ending horizontal pixel number of the subimage
-        if xp <= S/2
-            istart = 1;
-            iend =  S;
-        else
-            if N-xp <= S/2
-                istart = N - S + 1;
-                iend = N;
-            else 
-                istart = xp - S/2 + 1;
-                iend = xp + S/2;
-            end
-        end
-        
-        % The beginnning and ending vertical pixel number of the subimage
-        if yp <= S/2
-            jstart = 1;
-            jend = S;
-        else
-            if M-yp <= S/2
-                jstart = M - S + 1;
-                jend = M;
-            else
-                jstart = yp - S/2 + 1;
-                jend = yp + S/2;
-            end
-        end
-        
-        % Cropped subimage fs(x,y) is now of size S-by-S
-        fs = f(istart:iend , jstart:jend);
-        
-        % Relative locations (xs,ys) of the point of interest
-        xs = xp - istart + 1;
-        ys = yp - jstart + 1;
-        
-    else  % square crop is not needed
-        
-        fs = f;
-        xs = xp;
-        ys = yp;
-        
-    end
+function [fs, xs, ys] = squareCropIntegral(I_f, xp, yp, S)
+  % Uses integral images for fast subregion extraction
+  
+  [N, M] = size(I_f); % Size of the integral image
+
+  % Validate input points
+  if mod(xp,1)~=0 || xp<1 || xp>N
+      error('xp must be an integer satisfying 1 <= xp <= %i', N);
+  end
+  if mod(yp,1)~=0 || yp<1 || yp>M
+      error('yp must be an integer satisfying 1 <= yp <= %i', M);
+  end
+  if mod(S,2)~=0
+      error('S must be an even integer <= %i', min([N, M]));
+  end
+
+  % Compute cropping boundaries (ensuring within image limits)
+  istart = max(1, xp - S/2 + 1);
+  iend = min(N, xp + S/2);
+  jstart = max(1, yp - S/2 + 1);
+  jend = min(M, yp + S/2);
+
+  % Compute cropped region using integral image lookup
+  fs = integralSum(I_f, istart, iend, jstart, jend);
+
+  % Compute relative location of (xp, yp) within the cropped region
+  xs = xp - istart + 1;
+  ys = yp - jstart + 1;
+end
+
     
