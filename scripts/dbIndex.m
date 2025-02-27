@@ -61,7 +61,7 @@
 % 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function dbIndex(dbPath,S,inc,frameSize,lv_check)
+function dbIndex(dbPath, S, inc, frameSize, lv_check)
 
   % List of images in the database (specify all possible image extensions)
   imageList = [dir([dbPath '*.jpg']);...
@@ -72,7 +72,7 @@ function dbIndex(dbPath,S,inc,frameSize,lv_check)
   
   % Initiate the database records (start with a large enough array; unused
   % rows will be deleted at the end)
-  DB = zeros(nImages*200^2,9);
+  DB = zeros(nImages * 200^2, 9);
   
   % Precompute constants (norms, coefficients, central weight)
   const = prepStep(S);
@@ -82,22 +82,18 @@ function dbIndex(dbPath,S,inc,frameSize,lv_check)
   
   for imageNo = 1:nImages
       
-      [~,fileName,ext] = fileparts(imageList(imageNo,:));
+      [~, fileName, ext] = fileparts(imageList(imageNo,:));
       impath = [dbPath fileName ext(1:4)];
-      [f,~] = readImage(impath);
       
-      [N,M] = size(f);
+      % 🔹 Read the image and retrieve its integral images
+      [f, ~, I_f, I_xf, I_yf, I_fW] = readImage(impath, const);
+      
+      [N, M] = size(f);
   
-      % 🔹 Precompute integral images for f and f * Wc
-      I_f = cumsum(cumsum(f, 1), 2);  % Standard integral image of f
-      I_xf = cumsum(cumsum(repmat((0:N-1)', 1, M) .* f, 1), 2);  % Integral image of x*f
-      I_yf = cumsum(cumsum(repmat(0:M-1, N, 1) .* f, 1), 2);  % Integral image of y*f
-      I_fW = cumsum(cumsum(f .* const.Wc, 1), 2);  % Integral image for weighted f
-  
-      xstart = max(inc,20);
+      xstart = max(inc, 20);
       xend = N - xstart;
       
-      ystart = max(inc,20);
+      ystart = max(inc, 20);
       yend = M - ystart;
       
       GloVar = var(f(:));
@@ -120,7 +116,7 @@ function dbIndex(dbPath,S,inc,frameSize,lv_check)
                   
                       if ~isempty(V)
                           rowno = rowno + 1;
-                          DB(rowno,:) = [ imageNo xp yp V ];
+                          DB(rowno, :) = [imageNo xp yp V];
                       end
                       
                   end
@@ -131,8 +127,8 @@ function dbIndex(dbPath,S,inc,frameSize,lv_check)
                   V = compDescDP(I_f, I_xf, I_yf, I_fW, xp, yp, S, const);
                   
                   if ~isempty(V)
-                    rowno = rowno + 1;
-                      DB(rowno,:) = [ imageNo xp yp V ];
+                      rowno = rowno + 1;
+                      DB(rowno, :) = [imageNo xp yp V];
                   end
                   
               end
@@ -143,9 +139,11 @@ function dbIndex(dbPath,S,inc,frameSize,lv_check)
   end
   
   % Delete the unused rows at the bottom
-  DB(rowno+1:nImages*200^2,:) = [];
+  DB(rowno+1:nImages * 200^2, :) = [];
   
   % Save the indexed database to file for later use
-  save('-mat',[dbPath 'indexedDB.mat'], 'DB', 'imageList', 'S', 'frameSize');
+  save('-mat', [dbPath 'indexedDB.mat'], 'DB', 'imageList', 'S', 'frameSize');
   
+end
+
   
